@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="id" data-theme="auto" data-size="m">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Latihan Wawancara</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Lewati ke konten utama</a>
+<div class="demo-banner" id="demoBanner" hidden>Mode demo: kamera dan hasil emosi adalah data simulasi, bukan pembacaan nyata.</div>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="16" cy="16" r="12"/><circle cx="16" cy="16" r="4" fill="currentColor" stroke="none"/></svg>
+      <span>Interview Pro</span>
+    </div>
+    <nav aria-label="Tahapan">
+      <ol class="steps" id="steps">
+        <li data-step="setup">1. Persiapan</li>
+        <li data-step="session">2. Simulasi</li>
+        <li data-step="report">3. Ringkasan</li>
+      </ol>
+    </nav>
+    <button class="btn btn-quiet" id="openPrefs" type="button" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+      Tampilan
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <div class="layout" id="layout" data-screen="setup">
+      <aside class="stage" aria-label="Kamera">
+        <div class="cam" id="cam" data-state="off">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="demoCanvas" width="640" height="360" hidden></canvas>
+          <canvas id="overlay"></canvas>
+          <div class="cam-ph" id="camPh">
+            <div class="spinner" id="camSpinner" hidden></div>
+            <p id="camPhText">Kamera belum aktif.</p>
+            <button class="btn btn-primary" id="camBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              Aktifkan kamera
+            </button>
+          </div>
+        </div>
+
+        <ul class="checks" id="checks">
+          <li data-ok="false" id="chkCam"><span class="mark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span><span id="chkCamText">Kamera belum aktif</span></li>
+          <li data-ok="false" id="chkFace"><span class="mark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span><span id="chkFaceText">Wajah belum terlihat</span></li>
+        </ul>
+        <p class="stage-note" id="camMsg" role="status"></p>
+
+        <div class="meter" id="meter" data-idle="true" hidden>
+          <p class="meter-title" id="meterTitle">Terbaca saat ini: <b id="meterNow">belum ada</b></p>
+          <div id="meterRows" aria-hidden="true"></div>
+          <button class="btn btn-text" id="previewBtn" type="button">Sembunyikan pratinjau</button>
+        </div>
+      </aside>
+
+      <div class="col-main">
+
+        <!-- 1. Persiapan -->
+        <section class="screen" id="screen-setup" aria-labelledby="h-setup">
+          <div class="card-panel">
+            <h1 class="title" id="h-setup" tabindex="-1">Latihan Wawancara</h1>
+            <p class="lead">Jawab beberapa pertanyaan sambil menghadap kamera untuk menganalisis ekspresi mikro wajah Anda secara lokal.</p>
+
+            <div class="options" style="margin-top: 1.5rem;">
+              <fieldset>
+                <legend>Jumlah pertanyaan</legend>
+                <div class="seg-group">
+                  <label class="seg"><input type="radio" name="count" value="3" checked><span>3 pertanyaan</span></label>
+                  <label class="seg"><input type="radio" name="count" value="5"><span>5 pertanyaan</span></label>
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend>Waktu menjawab tiap pertanyaan</legend>
+                <div class="seg-group">
+                  <label class="seg"><input type="radio" name="seconds" value="60"><span>1 menit</span></label>
+                  <label class="seg"><input type="radio" name="seconds" value="90" checked><span>1,5 menit</span></label>
+                  <label class="seg"><input type="radio" name="seconds" value="120"><span>2 menit</span></label>
+                  <label class="seg"><input type="radio" name="seconds" value="0"><span>Tanpa batas</span></label>
+                </div>
+                <p class="help">Waktu habis tidak memindahkan pertanyaan. Anda lanjut saat siap.</p>
+              </fieldset>
+              <fieldset>
+                <legend>Pratinjau kamera saat menjawab</legend>
+                <div class="seg-group">
+                  <label class="seg"><input type="radio" name="preview" value="show" checked><span>Tampilkan</span></label>
+                  <label class="seg"><input type="radio" name="preview" value="hide"><span>Sembunyikan</span></label>
+                </div>
+                <p class="help">Sembunyikan jika melihat wajah sendiri membuat Anda gugup. Kamera tetap membaca ekspresi.</p>
+              </fieldset>
+            </div>
+
+            <div class="consent" style="margin-top: 1.5rem;">
+              <input type="checkbox" id="consent" aria-describedby="consentText">
+              <label for="consent" id="consentText">Saya paham bahwa gambar tidak direkam. Potongan kecil wajah dikirim ke server lokal untuk dibaca lalu dibuang, dan ringkasan hanya ada di peramban ini.</label>
+            </div>
+
+            <div style="margin-top: 1.5rem;">
+              <div class="btn-row">
+                <button class="btn btn-primary" id="startBtn" type="button" aria-disabled="true" aria-describedby="startHint">Mulai simulasi</button>
+              </div>
+              <p class="start-hint" id="startHint">Aktifkan kamera dan centang persetujuan untuk mulai.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Simulasi -->
+        <section class="screen" id="screen-session" aria-labelledby="questionText" hidden>
+          <div class="card-panel">
+            <div>
+              <div class="progress-row">
+                <p class="progress-text" id="progressText">Pertanyaan 1 dari 3</p>
+                <p class="timer" id="timer" aria-hidden="true"><small id="timerLabel">Sisa waktu</small><span id="timerValue">1:30</span></p>
+              </div>
+              <div class="bar" role="progressbar" aria-label="Kemajuan pertanyaan" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" id="qBar"><i id="qBarFill"></i></div>
+            </div>
+            <div>
+              <h1 class="question" id="questionText" tabindex="-1"></h1>
+              <p class="tip" id="questionTip"></p>
+            </div>
+            <p class="notice" id="timeNotice" role="status" hidden></p>
+            <div class="session-controls">
+              <button class="btn btn-quiet" id="pauseBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                <span id="pauseLabel">Jeda</span>
+              </button>
+              <button class="btn btn-primary" id="nextBtn" type="button">Pertanyaan berikutnya</button>
+              <button class="btn btn-text" id="endBtn" type="button">Akhiri sesi</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+
+    <!-- 3. Ringkasan -->
+    <section class="screen report" id="screen-report" aria-labelledby="h-report" hidden>
+      <h1 class="title" id="h-report" tabindex="-1">Ringkasan Sesi</h1>
+      <p class="sub" id="reportMeta"></p>
+      <div id="reportBody"></div>
+      <div class="report-actions">
+        <button class="btn btn-primary" id="againBtn" type="button">Latihan lagi</button>
+        <button class="btn btn-quiet" id="printBtn" type="button">Cetak atau simpan PDF</button>
+        <button class="btn btn-quiet" id="jsonBtn" type="button">Unduh data (JSON)</button>
+        <button class="btn btn-text" id="wipeBtn" type="button">Hapus data sesi</button>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>Ekspresi wajah setiap orang berbeda, dan pembacaan ini bisa meleset. Hasilnya adalah perkiraan ekspresi yang tampak, bukan penilaian kepribadian, perasaan sebenarnya, atau kelayakan Anda.</p>
+    <details class="tech">
+      <summary>Info teknis untuk pengujian</summary>
+      <p class="tech-out" id="techOut">Belum ada data.</p>
+    </details>
+  </div>
+</footer>
+
+<p class="sr-only" id="sr" role="status" aria-live="polite"></p>
+
+<dialog id="prefsDlg" aria-labelledby="prefsTitle">
+  <form method="dialog">
+    <h2 id="prefsTitle">Pengaturan Tampilan</h2>
+    <div class="options">
+      <fieldset>
+        <legend>Tema</legend>
+        <div class="seg-group">
+          <label class="seg"><input type="radio" name="theme" value="auto" checked><span>Ikuti perangkat</span></label>
+          <label class="seg"><input type="radio" name="theme" value="light"><span>Terang</span></label>
+          <label class="seg"><input type="radio" name="theme" value="dark"><span>Gelap</span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Ukuran teks</legend>
+        <div class="seg-group">
+          <label class="seg"><input type="radio" name="size" value="m" checked><span>Normal</span></label>
+          <label class="seg"><input type="radio" name="size" value="l"><span>Besar</span></label>
+          <label class="seg"><input type="radio" name="size" value="xl"><span>Sangat besar</span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Gerakan di layar</legend>
+        <div class="seg-group">
+          <label class="seg"><input type="radio" name="motion" value="auto" checked><span>Ikuti perangkat</span></label>
+          <label class="seg"><input type="radio" name="motion" value="reduce"><span>Kurangi</span></label>
+        </div>
+      </fieldset>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" value="close">Selesai</button></div>
+  </form>
+</dialog>
+
+<dialog id="endDlg" aria-labelledby="endTitle">
+  <form method="dialog">
+    <h2 id="endTitle">Akhiri sesi sekarang?</h2>
+    <p style="color: var(--muted); margin-bottom: 1rem;">Ringkasan dibuat dari bagian yang sudah Anda jawab.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" value="end">Akhiri dan lihat ringkasan</button>
+      <button class="btn btn-quiet" value="cancel">Lanjutkan sesi</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
