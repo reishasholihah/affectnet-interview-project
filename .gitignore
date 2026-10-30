@@ -1,4 +1,13 @@
-*.idea
+certs/
+*.crt
+*.key
 __pycache__/
 *.py[cod]
-certs/
+*$py.class
+.venv/
+env/
+venv/
+*.env
+static/mediapipe/
+.DS_Store
+Thumbs.db
