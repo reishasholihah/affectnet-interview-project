@@ -1,363 +1,206 @@
 # Simulasi Wawancara Real-Time berbasis Deteksi Emosi Wajah (MobileNetV2 + AffectNet)
 
-Aplikasi web yang membaca ekspresi wajah dari kamera (laptop atau HP) saat latihan wawancara dan menampilkan estimasi emosi secara real-time dalam empat kelas wawancara: **Happy, Neutral, Tense, Calm**.
+Aplikasi web yang membaca ekspresi wajah dari kamera (laptop atau HP) saat latihan wawancara dan menampilkan estimasi emosi secara real-time dalam empat kelas wawancara: **Happy, Neutral, Tense, Calm**. Setelah sesi selesai, pengguna mendapat ringkasan evaluasi.
 
-> **Status: prototipe riset (Minggu 6: antarmuka dan ringkasan sesi sudah ada).** Belum ada angka akurasi yang valid untuk versi saat ini. Lihat bagian [Status dan keterbatasan](#status-dan-keterbatasan) sebelum mengutip hasil apa pun.
+> **Status: prototipe riset (Minggu 6: antarmuka dan ringkasan sesi sudah ada).** Belum ada angka akurasi yang valid untuk versi saat ini. Lihat [Status dan keterbatasan](#status-dan-keterbatasan-riset) sebelum mengutip hasil apa pun.
 
-## Cara Kerja
+## Cara kerja
 
 ```mermaid
 graph LR
     subgraph Client ["Browser (HP / Laptop)"]
-        A[Kamera / Webcam] --> B[MediaPipe FaceDetector\nBlazeFace ~40 FPS]
-        B -->|Bounding Box| C[Canvas Overlay]
-        B -->|Crop Wajah 224x224 ~5KB| D[Fetch Queue\nMaks 2 in-flight]
-        E[Render UI / Meter Emosi]
+        A[Kamera / Webcam] --> B["MediaPipe FaceDetector<br/>BlazeFace ~40 FPS"]
+        B -->|Bounding box| C[Canvas overlay]
+        B -->|"Crop wajah 224x224 (~5 KB)"| D["Antrean kirim<br/>maks 2 in-flight"]
+        E["Antarmuka sesi + meter emosi<br/>+ ringkasan (dihitung di browser)"]
     end
 
-    subgraph Server ["Server Lokal (Flask + Cheroot)"]
+    subgraph Server ["Server lokal (Flask + cheroot)"]
         F["POST /classify_face"]
-        G["Decode JPEG & RGB Conversion"]
-        H["EmotionClassifier\n(MobileNetV2 / Softmax 8)"]
-        I["InterviewEmotionPredictor\n(Pemetaan 8 → 4 Kelas)"]
-        J["Moving Average Buffer\n(deque maxlen=5 per Klien)"]
+        G["Decode JPEG + konversi RGB"]
+        H["EmotionClassifier<br/>(softmax 8 kelas AffectNet)"]
+        I["InterviewEmotionPredictor<br/>(pemetaan 8 ke 4 kelas)"]
+        J["Moving average<br/>(5 pembacaan per klien)"]
         K["GET /ping"]
-        
         F --> G --> H --> I --> J
     end
 
-    D -->|HTTPS Payload| F
-    J -->|JSON: Label + Probabilitas| E
-
+    D -->|HTTPS| F
+    J -->|"JSON: probabilitas 4 kelas"| E
 ```
 
-* **Client-Side Face Detection:** Deteksi wajah berjalan **di browser** menggunakan MediaPipe Tasks Vision. Frame penuh tidak dikirim ke server; hanya crop wajah $224\times224$ (~5 KB).
-
-
-* **Server-Side Classification:** Klasifikasi emosi (8 kelas AffectNet) berjalan **di server lokal** dengan `classificator_full_model.pb` (bobot pre-trained, tanpa retraining).
-
-
-* **Emotion Mapping:** Delapan kelas AffectNet dipetakan ke empat kelas wawancara oleh `interview_model_wrapper.py`.
-
-
-* **Jaminan Privasi:** Frame penuh kamera tidak pernah meninggalkan perangkat; crop wajah biner diproses di memori server lokal dan langsung dibuang tanpa disimpan.
-
-
+- **Deteksi wajah di browser.** MediaPipe Tasks Vision (BlazeFace) berjalan di peramban. Frame penuh tidak dikirim ke server; hanya crop wajah 224x224 (~5 KB).
+- **Klasifikasi di server lokal.** Klasifikasi emosi (8 kelas AffectNet) memakai `classificator_full_model.pb` (bobot pre-trained, tanpa retraining).
+- **Pemetaan emosi.** Delapan kelas AffectNet dipetakan ke empat kelas wawancara oleh `interview_model_wrapper.py`. Bobot pemetaan bersifat heuristik.
+- **Ringkasan di browser.** Ringkasan sesi dihitung di peramban dan tidak disimpan di server.
+- **Prinsip privasi.** Frame penuh kamera tidak meninggalkan perangkat. Crop wajah diproses di memori server lokal dan dibuang tanpa disimpan. Sistem **belum sepenuhnya client-side** karena klasifikasi masih di server. Catatan: model MediaPipe diunduh dari CDN (alamat IP perangkat terlihat oleh CDN, tetapi tanpa data wajah), dan jika memakai ngrok, lalu lintas melewati server ngrok.
 
 ---
 
-## Cara Menjalankan Project (Minggu 6)
+## Persyaratan
 
-### Ringkasan Perubahan Utama
+- **Python 3.6** (environment pengembangan; TensorFlow 1.15 hanya mendukung Python 3.5-3.7). Cek dengan `python --version`.
+- Paket langsung ada di [`requirements.txt`](requirements.txt). `requirements-lock.txt` adalah hasil `pip freeze` penuh untuk mereproduksi environment persis. File itu khusus **Windows** (memuat `pywin32`, `pywinpty`, `wincertstore`).
+- Browser dengan akses internet (untuk mengunduh model MediaPipe dari CDN, kecuali memakai opsi self-host).
 
-* **File Eksekusi:** Server utama disatukan di `app.py`.
-
-
-* **Struktur Antarmuka:** Seluruh berkas frontend berada di folder `static/` (`index.html`, `style.css`, `app.js`).
-
-
-* **Persyaratan HTTPS:** Akses kamera dari peramban HP **hanya bisa diminta** melalui protokol `https://` atau `localhost`.
-
-
-* **Server Production:** Mode default menggunakan server **Cheroot** (mendukung HTTPS self-signed dan koneksi *HTTP keep-alive*).
-
-
-
-### Struktur Folder Proyek
-
-```text
-E:\DS-Interview-Project\AffectNet\
-  ├── app.py                      # Server utama Flask + Cheroot
-  ├── emotion_classifier.py       # Predictor 8-kelas AffectNet
-  ├── interview_model_wrapper.py  # Wrapper pemetaan 8 ke 4 kelas
-  ├── README.md                   # Dokumentasi proyek
-  ├── certs\                      # Dibuat otomatis saat server pertama kali berjalan
-  ├── deployment\
-  │   └── frozen_graphs\
-  │       └── classificator_full_model.pb
-  └── static\                     # Berkas antarmuka web
-      ├── index.html
-      ├── style.css
-      └── app.js
-```
-
-
-### Langkah 0: Instalasi Lingkungan (Sekali Saja)
-
-1. Buka **Anaconda Prompt**.
-2. Aktifkan environment dan pasang dependensi server tambhan:
-
-
+## Instalasi
 
 ```cmd
+git clone https://github.com/<USERNAME>/<NAMA_REPO>.git
+cd <NAMA_REPO>
+
+conda create -n affectnet-env python=3.6
 conda activate affectnet-env
-pip install cheroot cryptography
-
+pip install -r requirements.txt
 ```
 
----
+## Menjalankan
 
-### Langkah 1: Jalankan Server Lokal
-
-1. Masuk ke direktori proyek:
-
-
-
-```cmd
-cd path/ke/folder/AffectNet
-```
-
-2. Pastikan environment Anaconda aktif, lalu jalankan server:
-
-
+### Langkah 1: Server lokal
 
 ```cmd
 conda activate affectnet-env
 python app.py
-
 ```
 
-3. Tunggu hingga terminal menampilkan log startup:
-
-
+Tunggu log startup berikut:
 
 ```text
 [startup] impor selesai: X s
 [startup] model dimuat + pemanasan: Y s
-[startup] siap dalam Z s -> https://<IP_LOKAL_LAPTOP>
+[startup] siap dalam Z s -> https://<IP_LOKAL_LAPTOP>:5000
 [startup] server: cheroot (keep-alive aktif)
-
 ```
 
-Jika tampil `server: Flask dev (tanpa keep-alive)`, pastikan `cheroot` terpasang di environment Anda (`pip install cheroot`).
+Jika tampil `server: Flask dev (tanpa keep-alive)`, pasang cheroot: `pip install cheroot`.
 
-4. **Uji di Laptop:** Buka `https://localhost:5000` di peramban. Jika muncul peringatan sertifikat SSL self-signed, pilih **Lanjutkan / Proceed**.
+Uji di laptop: buka `https://localhost:5000`. Peringatan sertifikat self-signed akan muncul; pilih **Lanjutkan / Proceed**.
 
+### Langkah 2: Akses dari HP (satu jaringan Wi-Fi)
 
+1. Hubungkan HP dan laptop ke Wi-Fi yang sama (5 GHz bila tersedia).
+2. Buka di peramban HP, **dengan port 5000**:
+
+   ```text
+   https://<IP_LOKAL_LAPTOP>:5000
+   ```
+
+   IP laptop ada pada log startup, atau cek dengan `ipconfig`.
+3. Peringatan sertifikat muncul sekali per perangkat. Pilih **Lanjutkan / Proceed** (di Chrome: *Advanced* lalu *Proceed*).
+4. Izinkan akses kamera. Kamera dari peramban HP hanya bisa diminta lewat `https://` atau `localhost`.
+
+Panel debug (bagian "Info teknis untuk pengujian" di kaki halaman):
+
+| Metrik | Arti |
+| --- | --- |
+| `Deteksi lokal` | FPS deteksi wajah di browser |
+| `ping` | RTT request kosong ke server (jaringan dan koneksi) |
+| `RTT klasifikasi` | Waktu total dari pengiriman crop sampai estimasi emosi diterima |
+| `server X ms (inferensi Y, antre Z)` | Waktu di server; inferensi adalah klasifikasi murni, antre adalah menunggu giliran |
+| `kirim` | Ukuran crop JPEG yang dikirim (~5 KB) |
 
 ---
 
-### Langkah 2: Akses dari Smartphone (Satu Jaringan Wi-Fi)
+## Fitur pengujian dan konfigurasi
 
-1. Pastikan HP dan laptop terhubung ke jaringan Wi-Fi yang sama (gunakan frekuensi 5 GHz jika tersedia).
+### Mode demo (tanpa kamera dan tanpa model)
 
+Tambahkan `?demo=1` pada alamat, misalnya `https://localhost:5000/?demo=1`. Seluruh alur (persiapan, simulasi, ringkasan) berjalan dengan kamera dan emosi simulasi. Spanduk "Mode demo" selalu tampil. **Jangan mengutip angka dari mode demo.**
 
-2. Buka peramban HP, ketik alamat URL yang tampil di log startup terminal (atau cek IP dengan perintah `ipconfig`):
+### Variabel lingkungan (opsional)
 
+Setel di terminal sebelum `python app.py`:
+
+| Perintah | Efek |
+| --- | --- |
+| `set USE_HTTPS=0` | Server HTTP biasa (misalnya di belakang ngrok) |
+| `set USE_CHEROOT=0` | Server dev Flask (tanpa keep-alive) |
+
+### Alternatif: ngrok (jika HP tidak satu Wi-Fi)
+
+1. `set USE_HTTPS=0`, lalu `python app.py`.
+2. Terminal baru; sekali saja: `ngrok config add-authtoken TOKEN_ANDA`
+3. `ngrok http 5000 --region ap` (jika flag `--region` ditolak oleh versi ngrok Anda, jalankan tanpa flag itu).
+4. Buka URL `https://xxxx.ngrok-free.dev` di HP.
+
+### Opsional: self-host MediaPipe (tanpa CDN pihak ketiga)
+
+1. `npm pack @mediapipe/tasks-vision@0.10.14`, ekstrak, lalu salin `vision_bundle.mjs` dan folder `wasm/` ke `static/mediapipe/`.
+2. Unduh `blaze_face_short_range.tflite` ke `static/mediapipe/`.
+3. Di `static/app.js`, ubah `selfHost: false` menjadi `selfHost: true`.
+
+### Pemecahan masalah
+
+- **HP tidak bisa membuka halaman** ("took too long" atau "refused"): izinkan Python di Windows Firewall untuk jaringan *Private* (atau tambahkan aturan inbound TCP 5000), pastikan profil Wi-Fi laptop *Private*, dan pastikan router tidak memakai *client isolation* (umum pada Wi-Fi tamu atau kampus). Uji dulu dengan membuka `https://<IP_LOKAL_LAPTOP>:5000` di laptop sendiri.
+- **IP laptop berubah:** hapus folder `certs\` agar sertifikat dibuat ulang, lalu jalankan ulang server.
+- **"Kamera memerlukan HTTPS":** halaman dibuka lewat `http://` selain `localhost`. Gunakan `https://`.
+- **"Gagal memuat model deteksi wajah":** perangkat tidak bisa menjangkau CDN MediaPipe. Periksa internet atau pakai self-host.
+- **`ERR_NGROK_334`:** `taskkill /f /im ngrok.exe`, lalu jalankan ulang ngrok.
+- **Tampilan tidak berubah setelah mengedit `static/`:** hard reload (Ctrl+F5, atau Cmd+Shift+R di Mac).
+- **`antre` besar di panel debug:** turunkan `maxInFlight` menjadi `1` atau naikkan `minIntervalMs` di `CONFIG` pada `static/app.js`.
+
+---
+
+## Struktur proyek
 
 ```text
-https://<IP_LOKAL_LAPTOP>
-
+<NAMA_REPO>/
+  app.py                       Server Flask + cheroot (menyajikan static/, /classify_face, /ping)
+  emotion_classifier.py        Memuat model, mengembalikan softmax 8 kelas
+  interview_model_wrapper.py   Pemetaan 8 ke 4 kelas dan normalisasi
+  requirements.txt             Dependensi langsung
+  requirements-lock.txt        pip freeze penuh (Windows)
+  README.md
+  certs/                       Dibuat otomatis (jangan di-commit)
+  deployment/frozen_graphs/
+    classificator_full_model.pb
+  static/
+    index.html                 Tiga layar: persiapan, simulasi, ringkasan
+    style.css                  Tema terang/gelap, ukuran teks, pola emosi, gaya cetak
+    app.js                     Deteksi MediaPipe, sesi, ringkasan, mode demo
 ```
 
+Berkas versi lama (detektor SSD di server, regressor, versi awal `app.py`) sudah dihapus dari repo karena tidak dipakai. Riwayatnya ada di git.
 
-3. Peringatan sertifikat SSL akan muncul sekali per perangkat. Pilih **Lanjutkan / Proceed** (Pada Chrome: klik *Advanced* / *Lanjutan* $\rightarrow$ *Proceed*).
+## Fitur antarmuka
 
+- **Persiapan:** jumlah pertanyaan, waktu per pertanyaan (bisa "tanpa batas"), pratinjau kamera tampil atau sembunyi, persetujuan.
+- **Simulasi:** satu pertanyaan per layar, timer, jeda, meter ekspresi langsung. Banyak pertanyaan bergaya wawancara HRD tersedia di `static/app.js`.
+- **Ringkasan:** gambaran umum, rincian per pertanyaan, garis waktu sepanjang sesi, catatan latihan, keterangan keandalan, tabel data. Bisa dicetak atau disimpan sebagai PDF, diunduh sebagai JSON, atau dihapus.
 
-4. Berikan izin akses kamera. Panel debug di bawah pratinjau video akan menampilkan metrik real-time.
+## Aksesibilitas dan fitur inklusif
 
+Dirancang mengikuti prinsip WCAG 2.1.
 
+- **Pengodean ganda:** setiap kelas emosi punya warna, label teks, **dan** pola visual, sehingga tidak bergantung pada warna saja.
 
-Cara Membaca Panel Debug:
+  | Kelas | Warna | Pola |
+  | --- | --- | --- |
+  | Happy | `#FDAE61` (oranye) | bintik |
+  | Neutral | `#2B83BA` (biru) | garis tegak |
+  | Tense | `#D7191C` (merah) | garis miring |
+  | Calm | `#ABDDA4` (hijau) | garis datar |
 
-* `Deteksi lokal`: Frame rate (FPS) deteksi wajah lokal di browser.
-
-
-* `ping`: Waktu RTT request kosong ke server (mengukur latensi jaringan & koneksi).
-
-
-* `klasifikasi RTT`: Waktu total dari pengiriman crop wajah hingga menerima estimasi emosi.
-
-
-* `server X ms (infer Y, antre Z)`: Waktu pemrosesan server (`infer`: klasifikasi murni, `antre`: waktu menunggu antrean lock).
-
-
-* `kirim`: Ukuran payload crop JPEG yang dikirim (~5 KB).
-
-
-
----
-
-### Fitur Pengujian & Konfigurasi Tambahan
-
-#### Mode Demo (Tanpa Kamera & Tanpa Model)
-
-Tambahkan parameter `?demo=1` pada URL browser (misal: `https://localhost:5000/?demo=1`). Seluruh alur (persiapan, simulasi, ringkasan) akan berjalan menggunakan data kamera dan emosi simulasi tanpa memerlukan model AI. Spanduk indikator "Mode demo" akan muncul secara otomatis.
-
-#### Pengaturan Variabel Lingkungan (Opsional)
-
-Setel pada terminal sebelum mengeksekusi `python app.py`:
-
-| Perintah Terminal | Fungsi & Efek |
-| --- | --- |
-| `set USE_HTTPS=0` | Jalankan server pada mode HTTP standar (misalnya jika menggunakan tunneling ngrok)
-
- |
-| `set USE_CHEROOT=0` | Menggunakan server bawaan Flask development (tanpa keep-alive)
-
- |
-
-#### Alternative Tunneling: ngrok (Jika HP Tidak Satu Wi-Fi)
-
-1. Matikan HTTPS server: `set USE_HTTPS=0` lalu jalankan `python app.py`.
-
-
-2. Buka terminal baru, tambahkan authtoken (jika penggunaan pertama):
-
-
-```cmd
-ngrok config add-authtoken TOKEN_AUTHTOKEN_ANDA
-
-```
-
-
-3. Jalankan tunneling (Gunakan region Asia agar RTT rendah):
-
-
-```cmd
-ngrok http 5000 --region ap
-
-```
-
-
-4. Akses URL `https://xxxx.ngrok-free.dev` yang diberikan melalui browser HP Anda.
-
-
-
-#### Opsional: Self-Host MediaPipe (Penggunaan Offline)
-
-1. Unduh paket npm `@mediapipe/tasks-vision` versi `0.10.14` (`npm pack @mediapipe/tasks-vision@0.10.14`), ekstrak, lalu salin berkas berikut ke folder `static/mediapipe/`:
-
-
-* `vision_bundle.mjs`
-
-
-* Isi direktori `wasm/`
-
-
-
-
-2. Unduh model `blaze_face_short_range.tflite` dan simpan di `static/mediapipe/`.
-
-
-3. Pada file `static/app.js`, ubah konfigurasi `selfHost: false` menjadi `selfHost: true`.
-
-
+- **Tampilan:** tema terang, gelap, atau ikuti perangkat; ukuran teks Normal, Besar, Sangat besar; kurangi gerakan.
+- **Kontrol:** dapat dioperasikan dengan keyboard, fokus terlihat, target sentuh minimal 44 px. Timer bisa dimatikan, sesi bisa dijeda, dan pratinjau kamera bisa disembunyikan.
+- **Cetak/PDF:** aturan `@media print` mempertahankan warna dan pola.
 
 ---
 
-### Pemecahan Masalah (Troubleshooting)
+## Temuan teknis penting
 
-* **HP Tidak Bisa Membuka Halaman:** Pastikan Python diizinkan melewati Windows Firewall untuk jaringan *Private*, dan pastikan router Wi-Fi tidak mengaktifkan fitur *client isolation* (biasa ada pada Wi-Fi publik/guest).
+- Pipeline versi lama meneruskan **label argmax**, bukan probabilitas, ke pemetaan 8 ke 4 kelas, sehingga pemetaan bekerja pada vektor one-hot (misalnya Surprised selalu menjadi Neutral). Versi sekarang memakai softmax asli.
+- Server dev Werkzeug selalu mengirim `Connection: close`, sehingga handshake TLS diulang di tiap request. Karena itu dipakai cheroot (keep-alive).
 
+## Status dan keterbatasan riset
 
-* **IP Laptop Berubah:** Hapus folder `certs\` agar sertifikat SSL dibuat ulang secara otomatis sesuai alamat IP baru, lalu restart server.
+- **Belum ada akurasi valid** untuk pipeline saat ini. Pemetaan 8 ke 4 kelas masih heuristik dan belum dikalibrasi.
+- Model mengklasifikasi tampilan wajah, **bukan** Action Unit FACS. Pemetaan Tense dan Calm adalah heuristik terinformasi FACS, bukan deteksi otot.
+- Sistem menilai ekspresi yang tampak, bukan emosi internal atau kelayakan kandidat. Cara orang berekspresi berbeda karena budaya, kebiasaan, dan kondisi yang memengaruhi gerak wajah.
+- Hanya satu wajah utama per sesi.
 
+## Catatan untuk pengembang dan lisensi
 
-* **Pesan "Kamera memerlukan HTTPS":** Halaman diakses melalui HTTP biasa selain `localhost`. Gunakan prefix `https://`.
-
-
-* **Gagal Memuat Model Deteksi Wajah:** Perangkat HP/laptop tidak dapat menjangkau CDN MediaPipe. Cek koneksi internet atau gunakan opsi *self-host*.
-
-
-* **Error `ERR_NGROK_334` (Session Already Online):** Hentikan proses ngrok lama yang menggantung di latar belakang:
-
-
-```cmd
-taskkill /f /im ngrok.exe
-
-```
-
-
-* **Tampilan Tidak Berubah Setelah Edit `static/`:** Lakukan *hard reload* peramban (Ctrl + F5 di Windows/Linux atau Cmd + Shift + R di Mac).
-
-
-* **Antrean Server Tinggi (`antre` besar):** Kurangi nilai `maxInFlight` di bagian `CONFIG` pada `static/app.js` menjadi `1`, atau tingkatkan `minIntervalMs`.
-
-
-
----
-
-## Status File Project
-
-| File | Status | Keterangan |
-| --- | --- | --- |
-| `app.py` | **Aktif (jalankan ini)** | Server utama: menyajikan `static/`, endpoint `/classify_face` dan `/ping`. HTTPS self-signed, server cheroot.
-
- |
-| `static/index.html` | **Aktif** | Struktur tiga layar: persiapan, simulasi, ringkasan.
-
- |
-| `static/style.css` | **Aktif** | Gaya visual Krem (Warm Sand), tema terang/gelap, ukuran teks, pola emosi blind-friendly, dan gaya cetak/PDF.
-
- |
-| `static/app.js` | **Aktif** | Deteksi wajah MediaPipe, pengiriman crop, sesi wawancara (15 pertanyaan HRD), kalkulasi ringkasan, mode demo.
-
- |
-| `emotion_classifier.py` | **Aktif** | Memuat `classificator_full_model.pb`, mengembalikan probabilitas softmax 8 kelas.
-
- |
-| `interview_model_wrapper.py` | **Aktif** | `InterviewEmotionPredictor`: pemetaan 8 ke 4 kelas dan normalisasi.
-
- |
-| `deployment/frozen_graphs/classificator_full_model.pb` | **Aktif** | Model klasifikasi emosi.
-
- |
-| `deployment/tensorflow_detector.py` | Legacy | Detektor SSD + klasifikasi + regressor; hanya dipakai skrip legacy.
-
- |
-| `deployment/frozen_graphs/frozen_inference_graph_face.pb` | Legacy | Detektor wajah SSD; tidak dipakai versi MediaPipe.
-
- |
-| `deployment/frozen_graphs/regressor_full_model.pb` | Legacy | Regressor valence/arousal; tidak dipakai.
-
- |
-
----
-
-## Aksesibilitas dan Fitur Inklusif (WCAG 2.1)
-
-* **Desain Warna Aksesibel (Blind-Friendly):** Memakai palet warna emosi *ColorBrewer* yang selaras dengan tema Krem (*Warm Sand*):
-
-
-* **Happy:** `#FDAE61` (Kuning/Oranye) + Pola bintik
-* **Neutral:** `#2B83BA` (Biru) + Pola garis tegak
-* **Tense:** `#D7191C` (Merah) + Pola garis miring
-* **Calm:** `#ABDDA4` (Hijau) + Pola garis datar
-
-
-* **Prinsip Double Encoding:** Setiap kelas emosi memiliki warna, label teks eksplisit, dan tekstur pola visual sehingga penderita buta warna (Protanopia, Deuteranopia, Tritanopia) dapat mengenali emosi secara instan.
-
-
-* **Konsistensi PDF/Cetak:** Aturan `@media print` diselaraskan agar hasil cetak/PDF mempertahankan palet warna dan tekstur pola emosi.
-
-
-* **Kustomisasi Tampilan:** Mendukung tema terang/gelap, ukuran teks (Normal, Besar, Sangat Besar), serta pengurangan gerakan (*reduced motion*).
-
-
-* **Navigasi Keyboard & Screen Reader:** Seluruh elemen interaktif dapat diakses melalui tombol keyboard, memiliki *focus indicator* yang kontras, serta memenuhi target sentuh minimal 44 px.
-
-
-
----
-
-## Status dan Keterbatasan Riset
-
-* **Akurasi & Validasi Model:** Pemetaan 8 kelas AffectNet ke 4 kelas wawancara masih bersifat heuristik dan perlu dikalibrasi lebih lanjut.
-
-
-* **Ekspresi vs Status Mental:** Sistem menilai ekspresi wajah yang tampak, bukan mengukur emosi internal yang sebenarnya atau kualifikasi profesional kandidat.
-
-
-* **Penggunaan Tunggal:** Sistem saat ini hanya dirancang untuk mendeteksi 1 wajah utama dalam satu sesi wawancara.
-
-
-
----
-
-## Catatan untuk Pengembang & Lisensi
-
-* File bobot model `.pb` dapat melebihi batas 100 MB di GitHub. Pastikan menggunakan **Git LFS** atau menambahkan daftar file besar ke `.gitignore` sebelum melakukan push.
-
-
-* Jangan melakukan commit pada folder `certs/` karena berisi *private key* SSL lokal.
+- File `.pb` bisa melebihi batas 100 MB per file di GitHub. Gunakan [Git LFS](https://git-lfs.com) atau jangan di-commit dan dokumentasikan sumber unduhannya.
+- Bobot dan arsitektur klasifikasi berasal dari repositori `djordjebatic/AffectNet` berdasarkan karya tulis ilmiah AffectNet oleh Mollahosseini et al.
+- Jangan commit `certs/` (berisi private key), data uji berisi wajah orang, atau token (misalnya authtoken ngrok).
